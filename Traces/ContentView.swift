@@ -74,6 +74,8 @@ struct ContentView: View {
                     }
                 }
             }
+            .defaultScrollAnchor(.bottom, for: .initialOffset)
+            .defaultScrollAnchor(.topLeading, for: .alignment)
             .background(Color.black)
         }
     }
@@ -96,11 +98,15 @@ final class PhotoLibraryViewModel: ObservableObject {
 
     func requestAccessAndLoad() {
         PHPhotoLibrary.requestAuthorization(for: .readWrite) { [weak self] status in
+            guard let self else {
+                return
+            }
+            
             Task { @MainActor in
-                self?.authorizationStatus = status
+                self.authorizationStatus = status
 
                 if status == .authorized || status == .limited {
-                    self?.loadAssets()
+                    self.loadAssets()
                 }
             }
         }
@@ -124,7 +130,7 @@ final class PhotoLibraryViewModel: ObservableObject {
             fetchedAssets.append(asset)
         }
 
-        assets = fetchedAssets
+        assets = fetchedAssets.reversed()
     }
 }
 
