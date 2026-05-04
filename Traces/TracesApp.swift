@@ -9,6 +9,16 @@ import SwiftUI
 
 @main
 struct TracesApp: App {
+    private let database: AppDatabase
+    
+    init() {
+        do {
+            database = try AppDatabase()
+        } catch {
+            fatalError("Failed to open database: \(error)")
+        }
+    }
+    
     var body: some Scene {
         WindowGroup {
             ContentView()
