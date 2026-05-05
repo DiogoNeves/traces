@@ -16,7 +16,7 @@ actor IndexManager {
         self.store = store
     }
 
-    func indexPhotos(_ inputs: [PhotoIndexInput]) throws -> Int {
+    func indexPhotos(_ inputs: [PhotoIndexInput]) throws -> IndexingResult {
         guard !isIndexing else {
             throw IndexingError.alreadyIndexing
         }
@@ -32,8 +32,11 @@ actor IndexManager {
             try store.upsert(input)
             indexedCount += 1
         }
+        
+        let currentIDs = Set(inputs.map(\.id))
+        let prunedCount = try store.pruneIndexedPhotos(keepingIDs: currentIDs)
 
-        return indexedCount
+        return IndexingResult(indexedCount: indexedCount, prunedCount: prunedCount)
     }
 
     func indexedPhotoCount() throws -> Int {

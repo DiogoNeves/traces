@@ -95,6 +95,25 @@ nonisolated struct IndexStore {
             )
         }
     }
+    
+    func pruneIndexedPhotos(keepingIDs ids: Set<String>) throws -> Int {
+        try dbQueue.write { db in
+            if ids.isEmpty {
+                try db.execute(sql: "DELETE FROM indexed_photo")
+                return db.changesCount
+            }
+
+            let idsArray = Array(ids)
+
+            try db.execute(literal: """
+            DELETE FROM indexed_photo
+            WHERE id NOT IN \(idsArray)
+            """)
+
+            return db.changesCount
+        }
+    }
+
 
     func indexedPhotoCount() throws -> Int {
         try dbQueue.read { db in

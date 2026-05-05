@@ -147,9 +147,9 @@ final class PhotoLibraryViewModel: ObservableObject {
         
         Task {
             do {
-                let indexedCount = try await indexManager.indexPhotos(inputs)
+                let result = try await indexManager.indexPhotos(inputs)
                 let total = try await indexManager.indexedPhotoCount()
-                print("Indexed \(indexedCount) photos. Total indexed rows: \(total)")
+                print("Indexed \(result.indexedCount) photos and pruned \(result.prunedCount). Total indexed rows: \(total)")
             } catch {
                 print("Failed to index photos: \(error)")
             }
