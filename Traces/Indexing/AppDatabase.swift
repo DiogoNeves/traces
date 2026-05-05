@@ -10,6 +10,10 @@ import GRDB
 
 struct AppDatabase {
     let dbQueue: DatabaseQueue
+    
+    var indexStore: IndexStore {
+        IndexStore(dbQueue: dbQueue)
+    }
 
     init() throws {
         let fileManager = FileManager.default
