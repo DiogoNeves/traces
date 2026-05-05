@@ -9,7 +9,7 @@ import Foundation
 import Photos
 
 struct PhotoIndexInput: Equatable {
-    static let currentIndexVersion = 1
+    static let currentIndexVersion = 2
 
     let id: String
     let creationDate: Date?

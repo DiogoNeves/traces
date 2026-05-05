@@ -14,6 +14,47 @@ struct IndexStore {
     init(dbQueue: DatabaseQueue) {
         self.dbQueue = dbQueue
     }
+    
+    func photoIDsNeedingIndex(_ inputs: [PhotoIndexInput]) throws -> Set<String> {
+        guard !inputs.isEmpty else {
+            return []
+        }
+
+        let ids = inputs.map(\.id)
+
+        return try dbQueue.read { db in
+            let request: SQLRequest<Row> = """
+            SELECT id, fingerprint, index_version
+            FROM indexed_photo
+            WHERE id IN \(ids)
+            """
+            let rows = try request.fetchAll(db)
+
+            var existingByID: [String: Row] = [:]
+            for row in rows {
+                existingByID[row["id"]] = row
+            }
+
+            var needingIndex = Set<String>()
+
+            for input in inputs {
+                guard let row = existingByID[input.id] else {
+                    needingIndex.insert(input.id)
+                    continue
+                }
+
+                let storedFingerprint: String = row["fingerprint"]
+                let storedIndexVersion: Int = row["index_version"]
+
+                if storedFingerprint != input.fingerprint ||
+                    storedIndexVersion != PhotoIndexInput.currentIndexVersion {
+                    needingIndex.insert(input.id)
+                }
+            }
+
+            return needingIndex
+        }
+    }
 
     func upsert(_ input: PhotoIndexInput, indexedAt: Date = Date()) throws {
         try dbQueue.write { db in

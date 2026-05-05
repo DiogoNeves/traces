@@ -145,7 +145,8 @@ final class PhotoLibraryViewModel: ObservableObject {
         assets = fetchedAssets.reversed()
         
         do {
-            let indexedCount = try indexManager.indexPhotos(fetchedAssets)
+            let inputs = fetchedAssets.map(PhotoIndexInput.init(asset:))
+            let indexedCount = try indexManager.indexPhotos(inputs)
             let total = try indexManager.indexedPhotoCount()
             print("Indexed \(indexedCount) photos. Total indexed rows: \(total)")
         } catch {
