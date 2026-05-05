@@ -39,4 +39,12 @@ final class IndexManager {
     func indexedPhotoCount() throws -> Int {
         try store.indexedPhotoCount()
     }
+    
+    func wipeIndex() throws {
+        guard !isIndexing else {
+            throw IndexingError.alreadyIndexing
+        }
+
+        try store.wipeIndex()
+    }
 }

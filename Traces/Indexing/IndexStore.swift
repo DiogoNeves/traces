@@ -101,4 +101,10 @@ struct IndexStore {
             try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM indexed_photo") ?? 0
         }
     }
+    
+    func wipeIndex() throws {
+        try dbQueue.write { db in
+            try db.execute(sql: "DELETE FROM indexed_photo")
+        }
+    }
 }
