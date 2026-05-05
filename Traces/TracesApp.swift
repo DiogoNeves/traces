@@ -10,10 +10,12 @@ import SwiftUI
 @main
 struct TracesApp: App {
     private let database: AppDatabase
+    private let indexManager: IndexManager
     
     init() {
         do {
             database = try AppDatabase()
+            indexManager = IndexManager(store: database.indexStore)
         } catch {
             fatalError("Failed to open database: \(error)")
         }
@@ -21,7 +23,7 @@ struct TracesApp: App {
     
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            ContentView(indexManager: indexManager)
         }
     }
 }

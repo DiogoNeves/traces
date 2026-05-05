@@ -4,10 +4,16 @@ import UIKit
 import Combine
 
 struct ContentView: View {
-    @StateObject private var viewModel = PhotoLibraryViewModel()
+    @StateObject private var viewModel: PhotoLibraryViewModel
 
     private let columnCount = 4
     private let gridSpacing: CGFloat = 2
+    
+    init(indexManager: IndexManager) {
+        _viewModel = StateObject(
+            wrappedValue: PhotoLibraryViewModel(indexManager: indexManager)
+        )
+    }
 
     var body: some View {
         NavigationStack {
@@ -85,6 +91,12 @@ struct ContentView: View {
 final class PhotoLibraryViewModel: ObservableObject {
     @Published var authorizationStatus: PHAuthorizationStatus = PHPhotoLibrary.authorizationStatus(for: .readWrite)
     @Published var assets: [PHAsset] = []
+    
+    private let indexManager: IndexManager
+    
+    init(indexManager: IndexManager) {
+        self.indexManager = indexManager
+    }
 
     func loadIfAlreadyAuthorised() {
         authorizationStatus = PHPhotoLibrary.authorizationStatus(for: .readWrite)
@@ -118,7 +130,7 @@ final class PhotoLibraryViewModel: ObservableObject {
             NSSortDescriptor(key: "creationDate", ascending: false)
         ]
 
-        // Temporary limit while we learn. Later we will remove this and optimise properly.
+        // TODO: Remove this and optimise properly.
         options.fetchLimit = 500
 
         let result = PHAsset.fetchAssets(with: .image, options: options)
@@ -131,6 +143,14 @@ final class PhotoLibraryViewModel: ObservableObject {
         }
 
         assets = fetchedAssets.reversed()
+        
+        do {
+            let indexedCount = try indexManager.indexPhotos(fetchedAssets)
+            let total = try indexManager.indexedPhotoCount()
+            print("Indexed \(indexedCount) photos. Total indexed rows: \(total)")
+        } catch {
+            print("Failed to index photos: \(error)")
+        }
     }
 }
 
@@ -233,5 +253,6 @@ struct PhotoDetailView: View {
 }
 
 #Preview {
-    ContentView()
+    let database = try! AppDatabase()
+    ContentView(indexManager: IndexManager(store: database.indexStore))
 }

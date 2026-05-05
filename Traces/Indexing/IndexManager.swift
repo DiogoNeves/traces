@@ -19,7 +19,7 @@ final class IndexManager {
         var indexedCount = 0
 
         for asset in assets {
-            let input = PhotoIndexModel(asset: asset)
+            let input = PhotoIndexInput(asset: asset)
             try store.upsert(input)
             indexedCount += 1
         }

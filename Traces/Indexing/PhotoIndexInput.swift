@@ -8,7 +8,7 @@
 import Foundation
 import Photos
 
-struct PhotoIndexModel: Equatable {
+struct PhotoIndexInput: Equatable {
     static let currentIndexVersion = 1
 
     let id: String

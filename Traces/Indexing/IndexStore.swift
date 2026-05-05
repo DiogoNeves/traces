@@ -15,7 +15,7 @@ struct IndexStore {
         self.dbQueue = dbQueue
     }
 
-    func upsert(_ input: PhotoIndexModel, indexedAt: Date = Date()) throws {
+    func upsert(_ input: PhotoIndexInput, indexedAt: Date = Date()) throws {
         try dbQueue.write { db in
             try db.execute(
                 sql: """
@@ -48,7 +48,7 @@ struct IndexStore {
                     input.pixelHeight,
                     input.mediaSubtypesRawValue,
                     input.fingerprint,
-                    PhotoIndexModel.currentIndexVersion,
+                    PhotoIndexInput.currentIndexVersion,
                     indexedAt.timeIntervalSince1970
                 ]
             )
