@@ -8,8 +8,8 @@
 import Foundation
 import Photos
 
-struct PhotoIndexInput: Equatable {
-    static let currentIndexVersion = 2
+struct PhotoIndexInput: Equatable, Sendable {
+    nonisolated static let currentIndexVersion = 2
 
     let id: String
     let creationDate: Date?

@@ -8,7 +8,7 @@
 import Foundation
 import GRDB
 
-struct IndexStore {
+nonisolated struct IndexStore {
     private let dbQueue: DatabaseQueue
 
     init(dbQueue: DatabaseQueue) {

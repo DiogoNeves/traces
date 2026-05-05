@@ -8,7 +8,7 @@
 import Foundation
 import Photos
 
-final class IndexManager {
+actor IndexManager {
     private let store: IndexStore
     private var isIndexing = false
 
