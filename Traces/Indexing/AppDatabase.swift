@@ -56,6 +56,28 @@ struct AppDatabase {
                 table.column("indexed_at", .double).notNull()
             }
         }
+        
+        migrator.registerMigration("addMemoryRetrievalFields") { db in
+            try db.alter(table: "indexed_photo") { table in
+                table.add(column: "latitude", .double)
+                table.add(column: "longitude", .double)
+                table.add(column: "lat_bucket", .integer)
+                table.add(column: "lon_bucket", .integer)
+                table.add(column: "asset_kind", .text).notNull().defaults(to: "photo")
+            }
+
+            try db.create(
+                index: "idx_indexed_photo_location_bucket",
+                on: "indexed_photo",
+                columns: ["lat_bucket", "lon_bucket"]
+            )
+
+            try db.create(
+                index: "idx_indexed_photo_asset_kind",
+                on: "indexed_photo",
+                columns: ["asset_kind"]
+            )
+        }
 
         return migrator
     }
