@@ -70,7 +70,7 @@ struct ContentView: View {
                 LazyVGrid(columns: columns, spacing: gridSpacing) {
                     ForEach(viewModel.assets, id: \.localIdentifier) { asset in
                         NavigationLink {
-                            PhotoDetailView(asset: asset)
+                            PhotoDetailView(asset: asset, indexManager: viewModel.indexManager)
                         } label: {
                             PhotoThumbnailView(asset: asset)
                                 .frame(width: cellSize, height: cellSize)
@@ -92,7 +92,7 @@ final class PhotoLibraryViewModel: ObservableObject {
     @Published var authorizationStatus: PHAuthorizationStatus = PHPhotoLibrary.authorizationStatus(for: .readWrite)
     @Published var assets: [PHAsset] = []
     
-    private let indexManager: IndexManager
+    let indexManager: IndexManager
     
     init(indexManager: IndexManager) {
         self.indexManager = indexManager
@@ -213,8 +213,10 @@ struct PhotoThumbnailView: View {
 
 struct PhotoDetailView: View {
     let asset: PHAsset
+    let indexManager: IndexManager
 
     @State private var image: UIImage?
+    @State private var relatedAssets: [PHAsset] = []
 
     var body: some View {
         ZStack {
@@ -228,11 +230,35 @@ struct PhotoDetailView: View {
                 ProgressView()
                     .tint(.white)
             }
+
+            if !relatedAssets.isEmpty {
+                relatedPhotosRow
+            }
         }
         .navigationBarTitleDisplayMode(.inline)
         .task {
             requestFullImage()
+            loadRelatedPhotos()
         }
+    }
+    
+    private var relatedPhotosRow: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Related photos")
+                .font(.footnote.weight(.semibold))
+                .foregroundStyle(.white)
+
+            HStack(spacing: 8) {
+                ForEach(relatedAssets.prefix(3), id: \.localIdentifier) { asset in
+                    PhotoThumbnailView(asset: asset)
+                        .frame(width: 92, height: 92)
+                        .clipShape(RoundedRectangle(cornerRadius: 6))
+                }
+            }
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.ultraThinMaterial)
     }
 
     private func requestFullImage() {
@@ -255,6 +281,36 @@ struct PhotoDetailView: View {
         ) { image, _ in
             DispatchQueue.main.async {
                 self.image = image
+            }
+        }
+    }
+    
+    private func loadRelatedPhotos() {
+        let input = PhotoIndexInput(asset: asset)
+
+        Task {
+            do {
+                let candidates = try await indexManager.relatedPhotos(
+                    for: input,
+                    limit: 3
+                )
+
+                let ids = candidates.map(\.id)
+                let result = PHAsset.fetchAssets(
+                    withLocalIdentifiers: ids,
+                    options: nil
+                )
+
+                var fetchedAssets: [PHAsset] = []
+                fetchedAssets.reserveCapacity(result.count)
+
+                result.enumerateObjects { asset, _, _ in
+                    fetchedAssets.append(asset)
+                }
+
+                relatedAssets = fetchedAssets
+            } catch {
+                print("Failed to load related photos: \(error)")
             }
         }
     }
