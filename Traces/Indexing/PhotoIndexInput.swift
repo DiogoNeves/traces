@@ -65,9 +65,14 @@ struct PhotoIndexInput: Equatable, Sendable {
             id: asset.localIdentifier,
             creationDate: asset.creationDate,
             modificationDate: asset.modificationDate,
+            mediaSubtypesRawValue: asset.mediaSubtypes.rawValue,
+            assetKind: assetKind,
             pixelWidth: asset.pixelWidth,
             pixelHeight: asset.pixelHeight,
-            mediaSubtypesRawValue: asset.mediaSubtypes.rawValue
+            latitude: latitude,
+            longitude: longitude,
+            latBucket: latBucket,
+            lonBucket: lonBucket
         )
     }
     
@@ -81,18 +86,41 @@ struct PhotoIndexInput: Equatable, Sendable {
         id: String,
         creationDate: Date?,
         modificationDate: Date?,
+        mediaSubtypesRawValue: UInt,
+        assetKind: IndexedAssetKind,
         pixelWidth: Int,
         pixelHeight: Int,
-        mediaSubtypesRawValue: UInt
+        latitude: Double?,
+        longitude: Double?,
+        latBucket: Int?,
+        lonBucket: Int?
     ) -> String {
         // TODO: Replace with a compact stable hash if fingerprints become large.
-        [
+        let creationDateValue = creationDate.map {
+            String($0.timeIntervalSince1970)
+        } ?? "nil"
+        let modificationDateValue = modificationDate.map {
+            String($0.timeIntervalSince1970)
+        } ?? "nil"
+        let latitudeValue = latitude.map { String($0) } ?? "nil"
+        let longitudeValue = longitude.map { String($0) } ?? "nil"
+        let latBucketValue = latBucket.map(String.init) ?? "nil"
+        let lonBucketValue = lonBucket.map(String.init) ?? "nil"
+
+        let parts: [String] = [
             id,
-            creationDate.map { String($0.timeIntervalSince1970) } ?? "nil",
-            modificationDate.map { String($0.timeIntervalSince1970) } ?? "nil",
+            creationDateValue,
+            modificationDateValue,
+            String(mediaSubtypesRawValue),
+            assetKind.rawValue,
             String(pixelWidth),
             String(pixelHeight),
-            String(mediaSubtypesRawValue)
-        ].joined(separator: "|")
+            latitudeValue,
+            longitudeValue,
+            latBucketValue,
+            lonBucketValue
+        ]
+
+        return parts.joined(separator: "|")
     }
 }

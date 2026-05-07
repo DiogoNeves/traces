@@ -48,9 +48,9 @@ struct AppDatabase {
                 table.column("id", .text).primaryKey()
                 table.column("creation_date", .double)
                 table.column("modification_date", .double)
+                table.column("media_subtypes", .integer).notNull()
                 table.column("pixel_width", .integer).notNull()
                 table.column("pixel_height", .integer).notNull()
-                table.column("media_subtypes", .integer).notNull()
                 table.column("fingerprint", .text).notNull()
                 table.column("index_version", .integer).notNull()
                 table.column("indexed_at", .double).notNull()
@@ -59,11 +59,11 @@ struct AppDatabase {
         
         migrator.registerMigration("addMemoryRetrievalFields") { db in
             try db.alter(table: "indexed_photo") { table in
+                table.add(column: "asset_kind", .text).notNull().defaults(to: "photo")
                 table.add(column: "latitude", .double)
                 table.add(column: "longitude", .double)
                 table.add(column: "lat_bucket", .integer)
                 table.add(column: "lon_bucket", .integer)
-                table.add(column: "asset_kind", .text).notNull().defaults(to: "photo")
             }
 
             try db.create(
