@@ -43,6 +43,32 @@ actor IndexManager {
         try store.indexedPhotoCount()
     }
     
+    func relatedPhotos(for input: PhotoIndexInput, limit: Int = 20) throws -> [RelatedPhotoCandidate]
+    {
+        let candidates = try store.sameLocationCandidates(for: input)
+
+        let selectedDate = input.creationDate
+
+        let ranked = candidates.sorted { lhs, rhs in
+            switch (selectedDate, lhs.creationDate, rhs.creationDate) {
+            case let (selected?, lhsDate?, rhsDate?):
+                let lhsIsOlder = lhsDate < selected
+                let rhsIsOlder = rhsDate < selected
+
+                if lhsIsOlder != rhsIsOlder {
+                    return lhsIsOlder
+                }
+
+                return lhsDate < rhsDate
+
+            default:
+                return lhs.id < rhs.id
+            }
+        }
+
+        return Array(ranked.prefix(limit))
+    }
+    
     func wipeIndex() throws {
         guard !isIndexing else {
             throw IndexingError.alreadyIndexing

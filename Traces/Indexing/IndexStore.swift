@@ -110,6 +110,70 @@ nonisolated struct IndexStore {
             )
         }
     }
+
+    func indexedPhotoCount() throws -> Int {
+        try dbQueue.read { db in
+            try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM indexed_photo") ?? 0
+        }
+    }
+    
+    func sameLocationCandidates(
+        for input: PhotoIndexInput,
+        bucketRadius: Int = 1,
+        limit: Int = 200
+    ) throws -> [RelatedPhotoCandidate] {
+        guard let latBucket = input.latBucket,
+              let lonBucket = input.lonBucket else {
+            return []
+        }
+
+        return try dbQueue.read { db in
+            let minLatBucket = latBucket - bucketRadius
+            let maxLatBucket = latBucket + bucketRadius
+            let minLonBucket = lonBucket - bucketRadius
+            let maxLonBucket = lonBucket + bucketRadius
+
+            let rows = try Row.fetchAll(
+                db,
+                sql: """
+                SELECT id, creation_date, latitude, longitude, asset_kind
+                FROM indexed_photo
+                WHERE id != ?
+                AND lat_bucket BETWEEN ? AND ?
+                AND lon_bucket BETWEEN ? AND ?
+                AND asset_kind = ?
+                LIMIT ?
+                """,
+                arguments: [
+                    input.id,
+                    minLatBucket,
+                    maxLatBucket,
+                    minLonBucket,
+                    maxLonBucket,
+                    input.assetKind.rawValue,
+                    limit
+                ]
+            )
+
+            return rows.compactMap { row in
+                let rawKind: String = row["asset_kind"]
+
+                guard let assetKind = IndexedAssetKind(rawValue: rawKind) else {
+                    return nil
+                }
+
+                let creationTimestamp: Double? = row["creation_date"]
+
+                return RelatedPhotoCandidate(
+                    id: row["id"],
+                    creationDate: creationTimestamp.map(Date.init(timeIntervalSince1970:)),
+                    latitude: row["latitude"],
+                    longitude: row["longitude"],
+                    assetKind: assetKind
+                )
+            }
+        }
+    }
     
     func pruneIndexedPhotos(keepingIDs ids: Set<String>) throws -> Int {
         try dbQueue.write { db in
@@ -126,13 +190,6 @@ nonisolated struct IndexStore {
             """)
 
             return db.changesCount
-        }
-    }
-
-
-    func indexedPhotoCount() throws -> Int {
-        try dbQueue.read { db in
-            try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM indexed_photo") ?? 0
         }
     }
     
