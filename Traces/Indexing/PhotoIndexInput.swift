@@ -14,7 +14,7 @@ enum IndexedAssetKind: String, Sendable {
 }
 
 struct PhotoIndexInput: Equatable, Sendable {
-    nonisolated static let currentIndexVersion = 3
+    nonisolated static let currentIndexVersion = 4
     nonisolated static let locationBucketSize = 0.001
 
 

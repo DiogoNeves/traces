@@ -5,6 +5,7 @@ import Combine
 
 struct ContentView: View {
     @StateObject private var viewModel: PhotoLibraryViewModel
+    @State private var navigationPath: [String] = []
 
     private let columnCount = 4
     private let gridSpacing: CGFloat = 2
@@ -16,7 +17,7 @@ struct ContentView: View {
     }
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $navigationPath) {
             Group {
                 switch viewModel.authorizationStatus {
                 case .authorized, .limited:
@@ -52,6 +53,23 @@ struct ContentView: View {
             .task {
                 viewModel.loadIfAlreadyAuthorised()
             }
+            .navigationDestination(for: String.self) { assetID in
+                if let asset = viewModel.asset(withLocalIdentifier: assetID) {
+                    PhotoDetailView(
+                        asset: asset,
+                        indexManager: viewModel.indexManager,
+                        dismissToLibrary: {
+                            navigationPath.removeAll()
+                        }
+                    )
+                } else {
+                    ContentUnavailableView(
+                        "Photo Unavailable",
+                        systemImage: "photo",
+                        description: Text("This photo is no longer available.")
+                    )
+                }
+            }
         }
     }
 
@@ -69,9 +87,7 @@ struct ContentView: View {
             ScrollView {
                 LazyVGrid(columns: columns, spacing: gridSpacing) {
                     ForEach(viewModel.assets, id: \.localIdentifier) { asset in
-                        NavigationLink {
-                            PhotoDetailView(asset: asset, indexManager: viewModel.indexManager)
-                        } label: {
+                        NavigationLink(value: asset.localIdentifier) {
                             PhotoThumbnailView(asset: asset)
                                 .frame(width: cellSize, height: cellSize)
                                 .clipped()
@@ -82,9 +98,10 @@ struct ContentView: View {
             }
             .defaultScrollAnchor(.bottom, for: .initialOffset)
             .defaultScrollAnchor(.topLeading, for: .alignment)
-            .background(Color.black)
+            .background(Color(.systemBackground))
         }
     }
+
 }
 
 @MainActor
@@ -122,6 +139,15 @@ final class PhotoLibraryViewModel: ObservableObject {
                 }
             }
         }
+    }
+
+    func asset(withLocalIdentifier id: String) -> PHAsset? {
+        if let asset = assets.first(where: { $0.localIdentifier == id }) {
+            return asset
+        }
+
+        let result = PHAsset.fetchAssets(withLocalIdentifiers: [id], options: nil)
+        return result.firstObject
     }
 
     private func loadAssets() {
@@ -212,53 +238,217 @@ struct PhotoThumbnailView: View {
 }
 
 struct PhotoDetailView: View {
+    private enum Section: Hashable {
+        case photo
+    }
+
     let asset: PHAsset
     let indexManager: IndexManager
+    let dismissToLibrary: () -> Void
 
+    private let bottomToolbarHeight: CGFloat = 82
+
+    @State private var isShowingRelated = false
     @State private var image: UIImage?
     @State private var relatedAssets: [PHAsset] = []
 
     var body: some View {
-        ZStack {
-            Color.black.ignoresSafeArea()
+        GeometryReader { proxy in
+            ZStack(alignment: .bottom) {
+                Color(.systemBackground).ignoresSafeArea()
 
-            if let image {
-                Image(uiImage: image)
-                    .resizable()
-                    .scaledToFit()
-            } else {
-                ProgressView()
-                    .tint(.white)
-            }
+                ScrollViewReader { scrollProxy in
+                    ScrollView(.vertical, showsIndicators: false) {
+                        VStack(spacing: 0) {
+                            photoContent
+                                .frame(
+                                    width: proxy.size.width,
+                                    height: photoAreaHeight(for: proxy.size),
+                                    alignment: .center
+                                )
+                                .clipped()
+                                .contentShape(Rectangle())
+                                .id(Section.photo)
+                                .gesture(relatedRevealGesture(scrollProxy: scrollProxy))
 
-            if !relatedAssets.isEmpty {
-                relatedPhotosRow
+                            if isShowingRelated {
+                                relatedDetailsContent
+                                    .transition(.opacity)
+                            }
+
+                            Color.clear.frame(height: bottomToolbarHeight + 16)
+                        }
+                        .frame(
+                            minHeight: proxy.size.height,
+                            alignment: isShowingRelated ? .top : .center
+                        )
+                    }
+                    .background(Color(.systemBackground))
+                    .ignoresSafeArea(edges: isShowingRelated ? .top : [])
+                    .animation(revealAnimation, value: isShowingRelated)
+
+                    bottomToolbar(scrollProxy: scrollProxy)
+                }
             }
         }
         .navigationBarTitleDisplayMode(.inline)
-        .task {
-            requestFullImage()
-            loadRelatedPhotos()
+        .toolbarBackground(.hidden, for: .navigationBar)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button(action: dismissToLibrary) {
+                    Image(systemName: "xmark")
+                }
+                .accessibilityLabel("Back to library")
+            }
         }
+        .task(id: asset.localIdentifier) {
+            isShowingRelated = false
+            image = nil
+            relatedAssets = []
+            requestFullImage()
+            await loadRelatedPhotos()
+        }
+    }
+
+    private func photoAreaHeight(for size: CGSize) -> CGFloat {
+        guard isShowingRelated else {
+            return max(size.height - bottomToolbarHeight, size.height * 0.72)
+        }
+
+        return size.width
+    }
+
+    private func relatedRevealGesture(scrollProxy: ScrollViewProxy) -> some Gesture {
+        DragGesture(minimumDistance: 24)
+            .onEnded { value in
+                if value.translation.height < -40 {
+                    setRelatedPanelVisible(true, scrollProxy: scrollProxy)
+                } else if value.translation.height > 40 {
+                    setRelatedPanelVisible(false, scrollProxy: scrollProxy)
+                }
+            }
+    }
+
+    private var revealAnimation: Animation {
+        .snappy(duration: 0.34, extraBounce: 0.04)
+    }
+
+    private func setRelatedPanelVisible(
+        _ isVisible: Bool,
+        scrollProxy: ScrollViewProxy
+    ) {
+        withAnimation(revealAnimation) {
+            isShowingRelated = isVisible
+        }
+
+        if isVisible {
+            DispatchQueue.main.async {
+                withAnimation(revealAnimation) {
+                    scrollProxy.scrollTo(Section.photo, anchor: .top)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var photoContent: some View {
+        if let image {
+            Image(uiImage: image)
+                .resizable()
+                .aspectRatio(
+                    contentMode: isShowingRelated ? .fill : .fit
+                )
+        } else {
+            ProgressView()
+                .tint(.white)
+        }
+    }
+
+    private var relatedDetailsContent: some View {
+        VStack(alignment: .leading, spacing: 24) {
+            if relatedAssets.isEmpty {
+                emptyRelatedPhotos
+            } else {
+                relatedPhotosRow
+            }
+        }
+        .padding(.top, 18)
+        .padding(.horizontal, 16)
+        .padding(.bottom, 24)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var emptyRelatedPhotos: some View {
+        Text("No related photos")
+            .font(.footnote.weight(.semibold))
+            .foregroundStyle(.secondary)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.vertical, 4)
     }
     
     private var relatedPhotosRow: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Related photos")
                 .font(.footnote.weight(.semibold))
-                .foregroundStyle(.white)
+                .foregroundStyle(.primary)
 
             HStack(spacing: 8) {
                 ForEach(relatedAssets.prefix(3), id: \.localIdentifier) { asset in
-                    PhotoThumbnailView(asset: asset)
-                        .frame(width: 92, height: 92)
-                        .clipShape(RoundedRectangle(cornerRadius: 6))
+                    NavigationLink(value: asset.localIdentifier) {
+                        PhotoThumbnailView(asset: asset)
+                            .frame(width: 92, height: 92)
+                            .clipShape(RoundedRectangle(cornerRadius: 6))
+                    }
+                    .buttonStyle(.plain)
                 }
             }
         }
-        .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.ultraThinMaterial)
+    }
+
+    private func bottomToolbar(scrollProxy: ScrollViewProxy) -> some View {
+        HStack {
+            Spacer()
+
+            HStack(spacing: 18) {
+                Button {
+                } label: {
+                    Image(systemName: "square.and.arrow.up")
+                        .frame(width: 34, height: 44)
+                }
+                .accessibilityLabel("Share")
+
+                Button {
+                    setRelatedPanelVisible(
+                        !isShowingRelated,
+                        scrollProxy: scrollProxy
+                    )
+                } label: {
+                    Image(
+                        systemName: isShowingRelated
+                            ? "info.circle.fill"
+                            : "info.circle"
+                    )
+                    .frame(width: 34, height: 44)
+                }
+                .accessibilityLabel(
+                    isShowingRelated
+                        ? "Hide related photos"
+                        : "Show related photos"
+                )
+            }
+            .padding(.horizontal, 14)
+            .background(.ultraThinMaterial, in: Capsule())
+
+            Spacer()
+        }
+        .font(.title3)
+        .foregroundStyle(.primary)
+        .buttonStyle(.plain)
+        .padding(.horizontal, 24)
+        .padding(.top, 8)
+        .padding(.bottom, 12)
+        .frame(height: bottomToolbarHeight)
     }
 
     private func requestFullImage() {
@@ -285,33 +475,32 @@ struct PhotoDetailView: View {
         }
     }
     
-    private func loadRelatedPhotos() {
+    @MainActor
+    private func loadRelatedPhotos() async {
         let input = PhotoIndexInput(asset: asset)
 
-        Task {
-            do {
-                let candidates = try await indexManager.relatedPhotos(
-                    for: input,
-                    limit: 3
-                )
+        do {
+            let candidates = try await indexManager.relatedPhotos(
+                for: input,
+                limit: 3
+            )
+            let ids = candidates.map(\.id)
+            let result = PHAsset.fetchAssets(
+                withLocalIdentifiers: ids,
+                options: nil
+            )
 
-                let ids = candidates.map(\.id)
-                let result = PHAsset.fetchAssets(
-                    withLocalIdentifiers: ids,
-                    options: nil
-                )
+            var fetchedAssetsByID: [String: PHAsset] = [:]
+            fetchedAssetsByID.reserveCapacity(result.count)
 
-                var fetchedAssets: [PHAsset] = []
-                fetchedAssets.reserveCapacity(result.count)
-
-                result.enumerateObjects { asset, _, _ in
-                    fetchedAssets.append(asset)
-                }
-
-                relatedAssets = fetchedAssets
-            } catch {
-                print("Failed to load related photos: \(error)")
+            result.enumerateObjects { asset, _, _ in
+                fetchedAssetsByID[asset.localIdentifier] = asset
             }
+
+            relatedAssets = ids.compactMap { fetchedAssetsByID[$0] }
+        } catch {
+            print("Failed to load related photos: \(error)")
+            relatedAssets = []
         }
     }
 }
