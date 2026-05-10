@@ -11,11 +11,13 @@ import SwiftUI
 struct TracesApp: App {
     private let database: AppDatabase
     private let indexManager: IndexManager
+    private let photoLibraryService: PhotoLibraryService
     
     init() {
         do {
             database = try AppDatabase()
             indexManager = IndexManager(store: database.indexStore)
+            photoLibraryService = PhotoLibraryService()
         } catch {
             fatalError("Failed to open database: \(error)")
         }
@@ -23,7 +25,10 @@ struct TracesApp: App {
     
     var body: some Scene {
         WindowGroup {
-            ContentView(indexManager: indexManager)
+            ContentView(
+                indexManager: indexManager,
+                photoLibraryService: photoLibraryService
+            )
         }
     }
 }

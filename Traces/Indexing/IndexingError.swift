@@ -7,7 +7,7 @@
 
 import Foundation
 
-enum IndexingError: LocalizedError {
+nonisolated enum IndexingError: LocalizedError {
     case alreadyIndexing
 
     var errorDescription: String? {

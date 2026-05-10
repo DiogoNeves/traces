@@ -8,12 +8,12 @@
 import Foundation
 import Photos
 
-enum IndexedAssetKind: String, Sendable {
+nonisolated enum IndexedAssetKind: String, Sendable {
     case photo
     case screenshot
 }
 
-struct PhotoIndexInput: Equatable, Sendable {
+nonisolated struct PhotoIndexInput: Equatable, Sendable {
     nonisolated static let currentIndexVersion = 4
     nonisolated static let locationBucketSize = 0.001
 
@@ -35,23 +35,56 @@ struct PhotoIndexInput: Equatable, Sendable {
     
     let fingerprint: String
 
+    init(
+        id: String,
+        creationDate: Date?,
+        modificationDate: Date?,
+        mediaSubtypesRawValue: UInt,
+        assetKind: IndexedAssetKind,
+        pixelWidth: Int,
+        pixelHeight: Int,
+        latitude: Double?,
+        longitude: Double?,
+        latBucket: Int?,
+        lonBucket: Int?,
+        fingerprint: String? = nil
+    ) {
+        self.id = id
+        self.creationDate = creationDate
+        self.modificationDate = modificationDate
+        self.mediaSubtypesRawValue = mediaSubtypesRawValue
+        self.assetKind = assetKind
+        self.pixelWidth = pixelWidth
+        self.pixelHeight = pixelHeight
+        self.latitude = latitude
+        self.longitude = longitude
+        self.latBucket = latBucket
+        self.lonBucket = lonBucket
+        self.fingerprint = fingerprint ?? Self.makeFingerprint(
+            id: id,
+            creationDate: creationDate,
+            modificationDate: modificationDate,
+            mediaSubtypesRawValue: mediaSubtypesRawValue,
+            assetKind: assetKind,
+            pixelWidth: pixelWidth,
+            pixelHeight: pixelHeight,
+            latitude: latitude,
+            longitude: longitude,
+            latBucket: latBucket,
+            lonBucket: lonBucket
+        )
+    }
+
     init(asset: PHAsset) {
-        id = asset.localIdentifier
-        
-        creationDate = asset.creationDate
-        modificationDate = asset.modificationDate
-        mediaSubtypesRawValue = asset.mediaSubtypes.rawValue
-        assetKind = asset.mediaSubtypes.contains(.photoScreenshot)
+        let assetKind: IndexedAssetKind = asset.mediaSubtypes.contains(.photoScreenshot)
             ? .screenshot
             : .photo
-        
-        pixelWidth = asset.pixelWidth
-        pixelHeight = asset.pixelHeight
-        
         let location = asset.location
-        latitude = location?.coordinate.latitude
-        longitude = location?.coordinate.longitude
+        let latitude = location?.coordinate.latitude
+        let longitude = location?.coordinate.longitude
 
+        let latBucket: Int?
+        let lonBucket: Int?
         if let latitude, let longitude {
             latBucket = Self.bucket(for: latitude)
             lonBucket = Self.bucket(for: longitude)
@@ -60,8 +93,7 @@ struct PhotoIndexInput: Equatable, Sendable {
             lonBucket = nil
         }
 
-        // Used to detect whether the indexed metadata snapshot is stale.
-        fingerprint = Self.makeFingerprint(
+        self.init(
             id: asset.localIdentifier,
             creationDate: asset.creationDate,
             modificationDate: asset.modificationDate,
@@ -72,7 +104,8 @@ struct PhotoIndexInput: Equatable, Sendable {
             latitude: latitude,
             longitude: longitude,
             latBucket: latBucket,
-            lonBucket: lonBucket
+            lonBucket: lonBucket,
+            fingerprint: nil
         )
     }
     

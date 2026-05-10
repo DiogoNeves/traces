@@ -7,7 +7,7 @@
 
 import Foundation
 
-struct RelatedPhotoCandidate: Equatable, Sendable {
+nonisolated struct RelatedPhotoCandidate: Equatable, Sendable {
     let id: String
     let creationDate: Date?
     let latitude: Double?

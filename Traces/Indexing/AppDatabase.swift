@@ -8,7 +8,7 @@
 import Foundation
 import GRDB
 
-struct AppDatabase {
+nonisolated struct AppDatabase {
     let dbQueue: DatabaseQueue
     
     var indexStore: IndexStore {
@@ -37,6 +37,11 @@ struct AppDatabase {
         let databaseURL = directoryURL.appendingPathComponent("Traces.sqlite")
         dbQueue = try DatabaseQueue(path: databaseURL.path)
 
+        try Self.migrator.migrate(dbQueue)
+    }
+
+    init(dbQueue: DatabaseQueue) throws {
+        self.dbQueue = dbQueue
         try Self.migrator.migrate(dbQueue)
     }
 
@@ -77,6 +82,13 @@ struct AppDatabase {
                 on: "indexed_photo",
                 columns: ["asset_kind"]
             )
+        }
+
+        migrator.registerMigration("createIndexMetadata") { db in
+            try db.create(table: "index_metadata") { table in
+                table.column("key", .text).primaryKey()
+                table.column("value", .blob).notNull()
+            }
         }
 
         return migrator

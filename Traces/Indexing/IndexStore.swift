@@ -57,63 +57,43 @@ nonisolated struct IndexStore {
     }
 
     func upsert(_ input: PhotoIndexInput, indexedAt: Date = Date()) throws {
+        try upsert([input], indexedAt: indexedAt)
+    }
+
+    func upsert(_ inputs: [PhotoIndexInput], indexedAt: Date = Date()) throws {
+        guard !inputs.isEmpty else {
+            return
+        }
+
         try dbQueue.write { db in
-            try db.execute(
-                sql: """
-                INSERT INTO indexed_photo (
-                    id,
-                    creation_date,
-                    modification_date,
-                    media_subtypes,
-                    asset_kind,
-                    pixel_width,
-                    pixel_height,
-                    latitude,
-                    longitude,
-                    lat_bucket,
-                    lon_bucket,
-                    fingerprint,
-                    index_version,
-                    indexed_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ON CONFLICT(id) DO UPDATE SET
-                    creation_date = excluded.creation_date,
-                    modification_date = excluded.modification_date,
-                    media_subtypes = excluded.media_subtypes,
-                    asset_kind = excluded.asset_kind,
-                    pixel_width = excluded.pixel_width,
-                    pixel_height = excluded.pixel_height,
-                    latitude = excluded.latitude,
-                    longitude = excluded.longitude,
-                    lat_bucket = excluded.lat_bucket,
-                    lon_bucket = excluded.lon_bucket,
-                    fingerprint = excluded.fingerprint,
-                    index_version = excluded.index_version,
-                    indexed_at = excluded.indexed_at
-                """,
-                arguments: [
-                    input.id,
-                    input.creationDate?.timeIntervalSince1970,
-                    input.modificationDate?.timeIntervalSince1970,
-                    input.mediaSubtypesRawValue,
-                    input.assetKind.rawValue,
-                    input.pixelWidth,
-                    input.pixelHeight,
-                    input.latitude,
-                    input.longitude,
-                    input.latBucket,
-                    input.lonBucket,
-                    input.fingerprint,
-                    PhotoIndexInput.currentIndexVersion,
-                    indexedAt.timeIntervalSince1970
-                ]
-            )
+            for input in inputs {
+                try Self.upsert(input, indexedAt: indexedAt, in: db)
+            }
         }
     }
 
     func indexedPhotoCount() throws -> Int {
         try dbQueue.read { db in
             try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM indexed_photo") ?? 0
+        }
+    }
+
+    func hasIndexVersionMismatch(currentVersion: Int) throws -> Bool {
+        try dbQueue.read { db in
+            let count = try Int.fetchOne(
+                db,
+                sql: """
+                SELECT EXISTS (
+                    SELECT 1
+                    FROM indexed_photo
+                    WHERE index_version != ?
+                    LIMIT 1
+                )
+                """,
+                arguments: [currentVersion]
+            ) ?? 0
+
+            return count > 0
         }
     }
     
@@ -182,14 +162,56 @@ nonisolated struct IndexStore {
                 return db.changesCount
             }
 
-            let idsArray = Array(ids)
+            try db.execute(
+                sql: """
+                CREATE TEMP TABLE IF NOT EXISTS current_index_asset (
+                    id TEXT PRIMARY KEY
+                )
+                """
+            )
+            try db.execute(sql: "DELETE FROM current_index_asset")
 
-            try db.execute(literal: """
+            for id in ids {
+                try db.execute(
+                    sql: "INSERT OR IGNORE INTO current_index_asset (id) VALUES (?)",
+                    arguments: [id]
+                )
+            }
+
+            try db.execute(sql: """
             DELETE FROM indexed_photo
-            WHERE id NOT IN \(idsArray)
+            WHERE NOT EXISTS (
+                SELECT 1
+                FROM current_index_asset
+                WHERE current_index_asset.id = indexed_photo.id
+            )
             """)
 
             return db.changesCount
+        }
+    }
+
+    func deleteIndexedPhotos(withIDs ids: Set<String>) throws -> Int {
+        guard !ids.isEmpty else {
+            return 0
+        }
+
+        return try dbQueue.write { db in
+            var deletedCount = 0
+            let idsArray = Array(ids)
+
+            for startIndex in stride(from: 0, to: idsArray.count, by: 500) {
+                let endIndex = min(startIndex + 500, idsArray.count)
+                let batch = Array(idsArray[startIndex..<endIndex])
+
+                try db.execute(literal: """
+                DELETE FROM indexed_photo
+                WHERE id IN \(batch)
+                """)
+                deletedCount += db.changesCount
+            }
+
+            return deletedCount
         }
     }
     
@@ -197,5 +219,94 @@ nonisolated struct IndexStore {
         try dbQueue.write { db in
             try db.execute(sql: "DELETE FROM indexed_photo")
         }
+    }
+
+    func metadataData(forKey key: String) throws -> Data? {
+        try dbQueue.read { db in
+            try Data.fetchOne(
+                db,
+                sql: "SELECT value FROM index_metadata WHERE key = ?",
+                arguments: [key]
+            )
+        }
+    }
+
+    func setMetadataData(_ data: Data, forKey key: String) throws {
+        try dbQueue.write { db in
+            try db.execute(
+                sql: """
+                INSERT INTO index_metadata (key, value)
+                VALUES (?, ?)
+                ON CONFLICT(key) DO UPDATE SET value = excluded.value
+                """,
+                arguments: [key, data]
+            )
+        }
+    }
+
+    func removeMetadataData(forKey key: String) throws {
+        try dbQueue.write { db in
+            try db.execute(
+                sql: "DELETE FROM index_metadata WHERE key = ?",
+                arguments: [key]
+            )
+        }
+    }
+
+    private static func upsert(
+        _ input: PhotoIndexInput,
+        indexedAt: Date,
+        in db: Database
+    ) throws {
+        try db.execute(
+            sql: """
+            INSERT INTO indexed_photo (
+                id,
+                creation_date,
+                modification_date,
+                media_subtypes,
+                asset_kind,
+                pixel_width,
+                pixel_height,
+                latitude,
+                longitude,
+                lat_bucket,
+                lon_bucket,
+                fingerprint,
+                index_version,
+                indexed_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(id) DO UPDATE SET
+                creation_date = excluded.creation_date,
+                modification_date = excluded.modification_date,
+                media_subtypes = excluded.media_subtypes,
+                asset_kind = excluded.asset_kind,
+                pixel_width = excluded.pixel_width,
+                pixel_height = excluded.pixel_height,
+                latitude = excluded.latitude,
+                longitude = excluded.longitude,
+                lat_bucket = excluded.lat_bucket,
+                lon_bucket = excluded.lon_bucket,
+                fingerprint = excluded.fingerprint,
+                index_version = excluded.index_version,
+                indexed_at = excluded.indexed_at
+            """,
+            arguments: [
+                input.id,
+                input.creationDate?.timeIntervalSince1970,
+                input.modificationDate?.timeIntervalSince1970,
+                input.mediaSubtypesRawValue,
+                input.assetKind.rawValue,
+                input.pixelWidth,
+                input.pixelHeight,
+                input.latitude,
+                input.longitude,
+                input.latBucket,
+                input.lonBucket,
+                input.fingerprint,
+                PhotoIndexInput.currentIndexVersion,
+                indexedAt.timeIntervalSince1970
+            ]
+        )
     }
 }
