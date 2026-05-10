@@ -61,6 +61,10 @@ struct PhotoDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.hidden, for: .navigationBar)
         .toolbar {
+            ToolbarItem(placement: .principal) {
+                detailDatePill
+            }
+
             ToolbarItem(placement: .topBarTrailing) {
                 Button(action: dismissToLibrary) {
                     Image(systemName: "xmark")
@@ -82,6 +86,31 @@ struct PhotoDetailView: View {
 
     private var revealAnimation: Animation {
         .snappy(duration: 0.34, extraBounce: 0.04)
+    }
+
+    private var formattedDateText: String? {
+        guard let creationDate = asset.creationDate else {
+            return nil
+        }
+
+        return creationDate.formatted(
+            .dateTime
+                .day()
+                .month(.wide)
+                .year()
+        )
+    }
+
+    private var formattedTimeText: String? {
+        guard let creationDate = asset.creationDate else {
+            return nil
+        }
+
+        return creationDate.formatted(
+            .dateTime
+                .hour()
+                .minute()
+        )
     }
 
     private func photoAreaHeight(for size: CGSize) -> CGFloat {
@@ -117,6 +146,28 @@ struct PhotoDetailView: View {
                     scrollProxy.scrollTo(Section.photo, anchor: .top)
                 }
             }
+        }
+    }
+
+    @ViewBuilder
+    private var detailDatePill: some View {
+        if let formattedDateText, let formattedTimeText {
+            VStack(spacing: 0) {
+                Text(formattedDateText)
+                    .font(.subheadline.weight(.semibold))
+
+                Text(formattedTimeText)
+                    .font(.caption2.weight(.semibold))
+            }
+            .foregroundStyle(.primary)
+            .lineLimit(1)
+            .minimumScaleFactor(0.8)
+            .padding(.horizontal, 22)
+            .frame(height: 42)
+            .frame(minWidth: 146)
+            .background(.ultraThinMaterial, in: Capsule())
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("\(formattedDateText), \(formattedTimeText)")
         }
     }
 
