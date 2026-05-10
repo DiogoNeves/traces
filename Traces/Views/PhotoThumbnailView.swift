@@ -20,8 +20,11 @@ struct PhotoThumbnailView: View {
                 Image(uiImage: image)
                     .resizable()
                     .scaledToFill()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
+        .clipped()
+        .contentShape(Rectangle())
         .onAppear {
             requestThumbnail()
         }
