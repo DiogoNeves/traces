@@ -194,6 +194,57 @@ struct TracesTests {
         #expect(sections.first?.candidates.map(\.id) == ["same-place"])
     }
 
+    @Test func relatedSectionsPreferFavoritesBeforeOtherCandidates() async throws {
+        let database = try makeDatabase()
+        let manager = IndexManager(store: database.indexStore)
+
+        let selectedDate = try #require(Calendar.current.date(
+            from: DateComponents(year: 2026, month: 5, day: 10)
+        ))
+        let olderDate = try #require(Calendar.current.date(
+            from: DateComponents(year: 2024, month: 5, day: 10)
+        ))
+
+        let selected = makeInput(
+            id: "selected",
+            creationDate: selectedDate,
+            assetKind: .photo,
+            latitude: 51.5,
+            longitude: -0.1
+        )
+        let nearbyRegularPhoto = makeInput(
+            id: "nearby-regular-photo",
+            creationDate: olderDate,
+            assetKind: .photo,
+            latitude: 51.5001,
+            longitude: -0.1001
+        )
+        let fartherFavoritePhoto = makeInput(
+            id: "farther-favorite-photo",
+            creationDate: olderDate,
+            assetKind: .photo,
+            isFavorite: true,
+            latitude: 51.501,
+            longitude: -0.101
+        )
+
+        _ = try await manager.indexPhotos([
+            selected,
+            nearbyRegularPhoto,
+            fartherFavoritePhoto
+        ])
+
+        let sections = try await manager.relatedSections(
+            for: selected,
+            limitPerSection: 3
+        )
+
+        #expect(sections.first?.candidates.map(\.id) == [
+            "farther-favorite-photo",
+            "nearby-regular-photo"
+        ])
+    }
+
     @Test func photoLibraryServiceSortsImagesOldestFirst() {
         let service = PhotoLibraryService()
         let options = service.makeImageFetchOptions()
@@ -214,6 +265,7 @@ struct TracesTests {
         modificationDate: Date? = nil,
         mediaSubtypesRawValue: UInt = 0,
         assetKind: IndexedAssetKind = .photo,
+        isFavorite: Bool = false,
         pixelWidth: Int = 100,
         pixelHeight: Int = 100,
         latitude: Double? = 51.5,
@@ -226,6 +278,7 @@ struct TracesTests {
             id: id,
             creationDate: creationDate,
             modificationDate: modificationDate,
+            isFavorite: isFavorite,
             mediaSubtypesRawValue: mediaSubtypesRawValue,
             assetKind: assetKind,
             pixelWidth: pixelWidth,

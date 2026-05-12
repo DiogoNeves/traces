@@ -91,6 +91,20 @@ nonisolated struct AppDatabase {
             }
         }
 
+        migrator.registerMigration("addFavoriteToIndexedPhoto") { db in
+            try db.alter(table: "indexed_photo") { table in
+                table.add(column: "is_favorite", .boolean)
+                    .notNull()
+                    .defaults(to: false)
+            }
+
+            try db.create(
+                index: "idx_indexed_photo_favorite",
+                on: "indexed_photo",
+                columns: ["is_favorite"]
+            )
+        }
+
         return migrator
     }
 }

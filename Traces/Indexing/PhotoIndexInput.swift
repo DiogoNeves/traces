@@ -14,7 +14,7 @@ nonisolated enum IndexedAssetKind: String, Sendable {
 }
 
 nonisolated struct PhotoIndexInput: Equatable, Sendable {
-    nonisolated static let currentIndexVersion = 4
+    nonisolated static let currentIndexVersion = 5
     nonisolated static let locationBucketSize = 0.001
 
 
@@ -22,6 +22,7 @@ nonisolated struct PhotoIndexInput: Equatable, Sendable {
     
     let creationDate: Date?
     let modificationDate: Date?
+    let isFavorite: Bool
     let mediaSubtypesRawValue: UInt
     let assetKind: IndexedAssetKind
     
@@ -39,6 +40,7 @@ nonisolated struct PhotoIndexInput: Equatable, Sendable {
         id: String,
         creationDate: Date?,
         modificationDate: Date?,
+        isFavorite: Bool,
         mediaSubtypesRawValue: UInt,
         assetKind: IndexedAssetKind,
         pixelWidth: Int,
@@ -52,6 +54,7 @@ nonisolated struct PhotoIndexInput: Equatable, Sendable {
         self.id = id
         self.creationDate = creationDate
         self.modificationDate = modificationDate
+        self.isFavorite = isFavorite
         self.mediaSubtypesRawValue = mediaSubtypesRawValue
         self.assetKind = assetKind
         self.pixelWidth = pixelWidth
@@ -64,6 +67,7 @@ nonisolated struct PhotoIndexInput: Equatable, Sendable {
             id: id,
             creationDate: creationDate,
             modificationDate: modificationDate,
+            isFavorite: isFavorite,
             mediaSubtypesRawValue: mediaSubtypesRawValue,
             assetKind: assetKind,
             pixelWidth: pixelWidth,
@@ -97,6 +101,7 @@ nonisolated struct PhotoIndexInput: Equatable, Sendable {
             id: asset.localIdentifier,
             creationDate: asset.creationDate,
             modificationDate: asset.modificationDate,
+            isFavorite: asset.isFavorite,
             mediaSubtypesRawValue: asset.mediaSubtypes.rawValue,
             assetKind: assetKind,
             pixelWidth: asset.pixelWidth,
@@ -119,6 +124,7 @@ nonisolated struct PhotoIndexInput: Equatable, Sendable {
         id: String,
         creationDate: Date?,
         modificationDate: Date?,
+        isFavorite: Bool,
         mediaSubtypesRawValue: UInt,
         assetKind: IndexedAssetKind,
         pixelWidth: Int,
@@ -144,6 +150,7 @@ nonisolated struct PhotoIndexInput: Equatable, Sendable {
             id,
             creationDateValue,
             modificationDateValue,
+            String(isFavorite),
             String(mediaSubtypesRawValue),
             assetKind.rawValue,
             String(pixelWidth),

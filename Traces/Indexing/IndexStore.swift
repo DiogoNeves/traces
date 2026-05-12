@@ -120,14 +120,20 @@ nonisolated struct IndexStore {
                 rows = try Row.fetchAll(
                     db,
                     sql: """
-                    SELECT id, creation_date, latitude, longitude, asset_kind
+                    SELECT
+                        id,
+                        creation_date,
+                        latitude,
+                        longitude,
+                        is_favorite,
+                        asset_kind
                     FROM indexed_photo
                     WHERE id != ?
                     AND lat_bucket BETWEEN ? AND ?
                     AND lon_bucket BETWEEN ? AND ?
                     AND asset_kind = ?
                     AND creation_date < ?
-                    ORDER BY creation_date DESC
+                    ORDER BY is_favorite DESC, creation_date DESC
                     LIMIT ?
                     """,
                     arguments: [
@@ -145,13 +151,19 @@ nonisolated struct IndexStore {
                 rows = try Row.fetchAll(
                     db,
                     sql: """
-                    SELECT id, creation_date, latitude, longitude, asset_kind
+                    SELECT
+                        id,
+                        creation_date,
+                        latitude,
+                        longitude,
+                        is_favorite,
+                        asset_kind
                     FROM indexed_photo
                     WHERE id != ?
                     AND lat_bucket BETWEEN ? AND ?
                     AND lon_bucket BETWEEN ? AND ?
                     AND asset_kind = ?
-                    ORDER BY creation_date DESC
+                    ORDER BY is_favorite DESC, creation_date DESC
                     LIMIT ?
                     """,
                     arguments: [
@@ -180,6 +192,7 @@ nonisolated struct IndexStore {
                     creationDate: creationTimestamp.map(Date.init(timeIntervalSince1970:)),
                     latitude: row["latitude"],
                     longitude: row["longitude"],
+                    isFavorite: row["is_favorite"],
                     assetKind: assetKind
                 )
             }
@@ -308,6 +321,7 @@ nonisolated struct IndexStore {
                 id,
                 creation_date,
                 modification_date,
+                is_favorite,
                 media_subtypes,
                 asset_kind,
                 pixel_width,
@@ -319,10 +333,11 @@ nonisolated struct IndexStore {
                 fingerprint,
                 index_version,
                 indexed_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
                 creation_date = excluded.creation_date,
                 modification_date = excluded.modification_date,
+                is_favorite = excluded.is_favorite,
                 media_subtypes = excluded.media_subtypes,
                 asset_kind = excluded.asset_kind,
                 pixel_width = excluded.pixel_width,
@@ -339,6 +354,7 @@ nonisolated struct IndexStore {
                 input.id,
                 input.creationDate?.timeIntervalSince1970,
                 input.modificationDate?.timeIntervalSince1970,
+                input.isFavorite,
                 input.mediaSubtypesRawValue,
                 input.assetKind.rawValue,
                 input.pixelWidth,

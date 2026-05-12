@@ -178,6 +178,10 @@ nonisolated struct RelatedPhotosService {
         _ rhs: RelatedPhotoCandidate,
         selectedInput: PhotoIndexInput
     ) -> Bool {
+        if lhs.isFavorite != rhs.isFavorite {
+            return lhs.isFavorite
+        }
+
         let lhsYearDifference = yearDifference(
             from: lhs.creationDate,
             to: selectedInput.creationDate
@@ -212,6 +216,10 @@ nonisolated struct RelatedPhotosService {
         _ rhs: RelatedPhotoCandidate,
         selectedInput: PhotoIndexInput
     ) -> Bool {
+        if lhs.isFavorite != rhs.isFavorite {
+            return lhs.isFavorite
+        }
+
         let lhsLocationDistance = distanceMeters(from: selectedInput, to: lhs)
         let rhsLocationDistance = distanceMeters(from: selectedInput, to: rhs)
 

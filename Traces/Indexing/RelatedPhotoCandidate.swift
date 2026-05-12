@@ -12,5 +12,6 @@ nonisolated struct RelatedPhotoCandidate: Equatable, Sendable {
     let creationDate: Date?
     let latitude: Double?
     let longitude: Double?
+    let isFavorite: Bool
     let assetKind: IndexedAssetKind
 }
