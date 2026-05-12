@@ -12,10 +12,12 @@ actor IndexManager {
     private static let photoLibraryChangeTokenKey = "photoLibraryChangeToken"
 
     private let store: IndexStore
+    private let relatedPhotosService: RelatedPhotosService
     private var isIndexing = false
 
     init(store: IndexStore) {
         self.store = store
+        relatedPhotosService = RelatedPhotosService(store: store)
     }
 
     func indexPhotos(_ inputs: [PhotoIndexInput]) throws -> IndexingResult {
@@ -143,31 +145,22 @@ actor IndexManager {
     
     func relatedPhotos(for input: PhotoIndexInput, limit: Int = 20) throws -> [RelatedPhotoCandidate]
     {
-        let candidates = try store.sameLocationCandidates(for: input)
+        let sections = try relatedPhotosService.sections(
+            for: input,
+            limitPerSection: limit
+        )
 
-        let selectedDate = input.creationDate
+        return Array(sections.flatMap(\.candidates).prefix(limit))
+    }
 
-        let ranked = candidates.sorted { lhs, rhs in
-            switch (selectedDate, lhs.creationDate, rhs.creationDate) {
-            case let (selected?, lhsDate?, rhsDate?):
-                let lhsIsOlder = lhsDate < selected
-                let rhsIsOlder = rhsDate < selected
-
-                if lhsIsOlder != rhsIsOlder {
-                    return lhsIsOlder
-                }
-
-                let lhsDistance = abs(lhsDate.timeIntervalSince(selected))
-                let rhsDistance = abs(rhsDate.timeIntervalSince(selected))
-
-                return lhsDistance < rhsDistance
-
-            default:
-                return lhs.id < rhs.id
-            }
-        }
-
-        return Array(ranked.prefix(limit))
+    func relatedSections(
+        for input: PhotoIndexInput,
+        limitPerSection: Int = 3
+    ) throws -> [RelatedPhotoSection] {
+        try relatedPhotosService.sections(
+            for: input,
+            limitPerSection: limitPerSection
+        )
     }
     
     func wipeIndex() throws {

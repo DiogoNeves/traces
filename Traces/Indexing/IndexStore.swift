@@ -97,9 +97,10 @@ nonisolated struct IndexStore {
         }
     }
     
-    func sameLocationCandidates(
+    func nearbyCandidates(
         for input: PhotoIndexInput,
         bucketRadius: Int = 1,
+        olderThan: Date? = nil,
         limit: Int = 200
     ) throws -> [RelatedPhotoCandidate] {
         guard let latBucket = input.latBucket,
@@ -113,27 +114,57 @@ nonisolated struct IndexStore {
             let minLonBucket = lonBucket - bucketRadius
             let maxLonBucket = lonBucket + bucketRadius
 
-            let rows = try Row.fetchAll(
-                db,
-                sql: """
-                SELECT id, creation_date, latitude, longitude, asset_kind
-                FROM indexed_photo
-                WHERE id != ?
-                AND lat_bucket BETWEEN ? AND ?
-                AND lon_bucket BETWEEN ? AND ?
-                AND asset_kind = ?
-                LIMIT ?
-                """,
-                arguments: [
-                    input.id,
-                    minLatBucket,
-                    maxLatBucket,
-                    minLonBucket,
-                    maxLonBucket,
-                    input.assetKind.rawValue,
-                    limit
-                ]
-            )
+            let rows: [Row]
+
+            if let olderThan {
+                rows = try Row.fetchAll(
+                    db,
+                    sql: """
+                    SELECT id, creation_date, latitude, longitude, asset_kind
+                    FROM indexed_photo
+                    WHERE id != ?
+                    AND lat_bucket BETWEEN ? AND ?
+                    AND lon_bucket BETWEEN ? AND ?
+                    AND asset_kind = ?
+                    AND creation_date < ?
+                    ORDER BY creation_date DESC
+                    LIMIT ?
+                    """,
+                    arguments: [
+                        input.id,
+                        minLatBucket,
+                        maxLatBucket,
+                        minLonBucket,
+                        maxLonBucket,
+                        input.assetKind.rawValue,
+                        olderThan.timeIntervalSince1970,
+                        limit
+                    ]
+                )
+            } else {
+                rows = try Row.fetchAll(
+                    db,
+                    sql: """
+                    SELECT id, creation_date, latitude, longitude, asset_kind
+                    FROM indexed_photo
+                    WHERE id != ?
+                    AND lat_bucket BETWEEN ? AND ?
+                    AND lon_bucket BETWEEN ? AND ?
+                    AND asset_kind = ?
+                    ORDER BY creation_date DESC
+                    LIMIT ?
+                    """,
+                    arguments: [
+                        input.id,
+                        minLatBucket,
+                        maxLatBucket,
+                        minLonBucket,
+                        maxLonBucket,
+                        input.assetKind.rawValue,
+                        limit
+                    ]
+                )
+            }
 
             return rows.compactMap { row in
                 let rawKind: String = row["asset_kind"]
@@ -153,6 +184,19 @@ nonisolated struct IndexStore {
                 )
             }
         }
+    }
+
+    func sameLocationCandidates(
+        for input: PhotoIndexInput,
+        bucketRadius: Int = 1,
+        limit: Int = 200
+    ) throws -> [RelatedPhotoCandidate] {
+        try nearbyCandidates(
+            for: input,
+            bucketRadius: bucketRadius,
+            olderThan: nil,
+            limit: limit
+        )
     }
     
     func pruneIndexedPhotos(keepingIDs ids: Set<String>) throws -> Int {

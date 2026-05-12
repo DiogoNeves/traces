@@ -1,15 +1,23 @@
 import SwiftUI
 import Photos
 
-struct RelatedPhotosSection: View {
+struct RelatedPhotoAssetSection: Identifiable {
+    let id: RelatedPhotoSectionKind
+    let title: String
     let assets: [PHAsset]
+}
+
+struct RelatedPhotosSection: View {
+    let sections: [RelatedPhotoAssetSection]
 
     var body: some View {
         VStack(alignment: .leading, spacing: 24) {
-            if assets.isEmpty {
+            if sections.isEmpty {
                 emptyRelatedPhotos
             } else {
-                relatedPhotosRow
+                ForEach(sections) { section in
+                    relatedPhotosRow(section)
+                }
             }
         }
         .padding(.top, 18)
@@ -26,14 +34,16 @@ struct RelatedPhotosSection: View {
             .padding(.vertical, 4)
     }
 
-    private var relatedPhotosRow: some View {
+    private func relatedPhotosRow(
+        _ section: RelatedPhotoAssetSection
+    ) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Related photos")
+            Text(section.title)
                 .font(.footnote.weight(.semibold))
                 .foregroundStyle(.primary)
 
             HStack(spacing: 8) {
-                ForEach(assets.prefix(3), id: \.localIdentifier) { asset in
+                ForEach(section.assets.prefix(3), id: \.localIdentifier) { asset in
                     NavigationLink(value: asset.localIdentifier) {
                         PhotoThumbnailView(asset: asset)
                             .frame(width: 92, height: 92)

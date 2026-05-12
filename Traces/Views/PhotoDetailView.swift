@@ -17,7 +17,7 @@ struct PhotoDetailView: View {
     @State private var isShowingRelated = false
     @State private var image: UIImage?
     @State private var imageRequestID: PHImageRequestID?
-    @State private var relatedAssets: [PHAsset] = []
+    @State private var relatedSections: [RelatedPhotoAssetSection] = []
 
     var body: some View {
         GeometryReader { proxy in
@@ -39,7 +39,7 @@ struct PhotoDetailView: View {
                                 .gesture(relatedRevealGesture(scrollProxy: scrollProxy))
 
                             if isShowingRelated {
-                                RelatedPhotosSection(assets: relatedAssets)
+                                RelatedPhotosSection(sections: relatedSections)
                                     .transition(.opacity)
                             }
 
@@ -75,7 +75,7 @@ struct PhotoDetailView: View {
         .task(id: asset.localIdentifier) {
             isShowingRelated = false
             image = nil
-            relatedAssets = []
+            relatedSections = []
             requestFullImage()
             await loadRelatedPhotos()
         }
@@ -267,11 +267,13 @@ struct PhotoDetailView: View {
         let input = PhotoIndexInput(asset: asset)
 
         do {
-            let candidates = try await indexManager.relatedPhotos(
+            let sections = try await indexManager.relatedSections(
                 for: input,
-                limit: 3
+                limitPerSection: 3
             )
-            let ids = candidates.map(\.id)
+            let ids = sections.flatMap { section in
+                section.candidates.map(\.id)
+            }
             let result = PHAsset.fetchAssets(
                 withLocalIdentifiers: ids,
                 options: nil
@@ -284,10 +286,24 @@ struct PhotoDetailView: View {
                 fetchedAssetsByID[asset.localIdentifier] = asset
             }
 
-            relatedAssets = ids.compactMap { fetchedAssetsByID[$0] }
+            relatedSections = sections.compactMap { section in
+                let assets = section.candidates.compactMap {
+                    fetchedAssetsByID[$0.id]
+                }
+
+                guard !assets.isEmpty else {
+                    return nil
+                }
+
+                return RelatedPhotoAssetSection(
+                    id: section.kind,
+                    title: section.title,
+                    assets: assets
+                )
+            }
         } catch {
             print("Failed to load related photos: \(error)")
-            relatedAssets = []
+            relatedSections = []
         }
     }
 }

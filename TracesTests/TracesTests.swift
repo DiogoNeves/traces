@@ -98,7 +98,7 @@ struct TracesTests {
         #expect(try await manager.requiresFullReconciliation(expectedAssetCount: 1))
     }
 
-    @Test func relatedRankingKeepsScreenshotsSeparateAndPrefersOlderPhotos() async throws {
+    @Test func relatedSectionsPreferEarlierYearsAndKeepScreenshotsSeparate() async throws {
         let database = try makeDatabase()
         let manager = IndexManager(store: database.indexStore)
 
@@ -148,9 +148,50 @@ struct TracesTests {
             olderPhoto
         ])
 
-        let related = try await manager.relatedPhotos(for: selected, limit: 3)
+        let sections = try await manager.relatedSections(
+            for: selected,
+            limitPerSection: 3
+        )
 
-        #expect(related.map(\.id) == ["older-photo", "newer-photo"])
+        #expect(sections.map(\.kind) == [.samePlaceEarlierYears])
+        #expect(sections.first?.candidates.map(\.id) == ["older-photo"])
+    }
+
+    @Test func relatedSectionsFallBackToSamePlaceWithoutEarlierYears() async throws {
+        let database = try makeDatabase()
+        let manager = IndexManager(store: database.indexStore)
+
+        let selectedDate = try #require(Calendar.current.date(
+            from: DateComponents(year: 2026, month: 5, day: 10)
+        ))
+        let sameYearDate = try #require(Calendar.current.date(
+            from: DateComponents(year: 2026, month: 5, day: 9)
+        ))
+
+        let selected = makeInput(
+            id: "selected",
+            creationDate: selectedDate,
+            assetKind: .photo,
+            latitude: 51.5,
+            longitude: -0.1
+        )
+        let samePlace = makeInput(
+            id: "same-place",
+            creationDate: sameYearDate,
+            assetKind: .photo,
+            latitude: 51.5001,
+            longitude: -0.1001
+        )
+
+        _ = try await manager.indexPhotos([selected, samePlace])
+
+        let sections = try await manager.relatedSections(
+            for: selected,
+            limitPerSection: 3
+        )
+
+        #expect(sections.map(\.kind) == [.samePlace])
+        #expect(sections.first?.candidates.map(\.id) == ["same-place"])
     }
 
     @Test func photoLibraryServiceSortsImagesOldestFirst() {
