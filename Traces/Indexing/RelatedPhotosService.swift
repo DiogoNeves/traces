@@ -299,12 +299,21 @@ nonisolated struct RelatedPhotosService {
         _ rhs: BucketedCandidate,
         selectedInput: PhotoIndexInput
     ) -> Bool {
-        if compareLocationThenID(
-            lhs.candidate,
-            rhs.candidate,
-            selectedInput: selectedInput
-        ) {
+        let lhsDistance = distanceMeters(from: selectedInput, to: lhs.candidate)
+        let rhsDistance = distanceMeters(from: selectedInput, to: rhs.candidate)
+
+        switch (lhsDistance, rhsDistance) {
+        case let (lhs?, rhs?) where lhs != rhs:
+            return lhs < rhs
+
+        case (_?, nil):
             return true
+
+        case (nil, _?):
+            return false
+
+        default:
+            break
         }
 
         switch (lhs.candidate.creationDate, rhs.candidate.creationDate) {
