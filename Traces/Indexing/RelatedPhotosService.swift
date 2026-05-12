@@ -81,22 +81,25 @@ nonisolated struct RelatedPhotosService {
         let bucketedCandidates = try collectOverTheYearsCandidates(
             for: input,
             buckets: buckets,
-            minimumCount: 2
+            minimumCount: maxCount
         )
         let sectionCandidates = spreadOverTheYearsCandidates(
             bucketedCandidates,
             maxCount: maxCount,
             selectedInput: input
         )
+        let uniqueSectionCandidates = uniqueCandidatesPreservingOrder(
+            sectionCandidates
+        )
 
-        guard sectionCandidates.count >= 2 else {
+        guard uniqueSectionCandidates.count >= 2 else {
             return nil
         }
 
         return RelatedPhotoSection(
             kind: .overTheYears,
             title: "Over the years",
-            candidates: sectionCandidates
+            candidates: uniqueSectionCandidates
         )
     }
 
@@ -125,7 +128,9 @@ nonisolated struct RelatedPhotosService {
             candidates,
             selectedInput: input
         ).filter { !excludedIDs.contains($0.id) }
-        let sectionCandidates = Array(rankedCandidates.prefix(limit))
+        let sectionCandidates = Array(
+            uniqueCandidatesPreservingOrder(rankedCandidates).prefix(limit)
+        )
 
         guard !sectionCandidates.isEmpty else {
             return nil
@@ -156,7 +161,9 @@ nonisolated struct RelatedPhotosService {
             candidates,
             selectedInput: input
         ).filter { !excludedIDs.contains($0.id) }
-        let sectionCandidates = Array(rankedCandidates.prefix(limit))
+        let sectionCandidates = Array(
+            uniqueCandidatesPreservingOrder(rankedCandidates).prefix(limit)
+        )
 
         guard !sectionCandidates.isEmpty else {
             return nil
@@ -291,6 +298,16 @@ nonisolated struct RelatedPhotosService {
                 $1,
                 selectedInput: selectedInput
             )
+        }
+    }
+
+    private func uniqueCandidatesPreservingOrder(
+        _ candidates: [RelatedPhotoCandidate]
+    ) -> [RelatedPhotoCandidate] {
+        var seenIDs = Set<String>()
+
+        return candidates.filter { candidate in
+            seenIDs.insert(candidate.id).inserted
         }
     }
 
