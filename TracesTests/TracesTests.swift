@@ -153,7 +153,7 @@ struct TracesTests {
             limitPerSection: 3
         )
 
-        #expect(sections.map(\.kind) == [.samePlaceEarlierYears])
+        #expect(sections.map(\.kind) == [.samePlaceEarlierYears, .samePlace])
         #expect(sections.first?.candidates.map(\.id) == ["older-photo"])
     }
 
@@ -194,6 +194,90 @@ struct TracesTests {
         #expect(sections.first?.candidates.map(\.id) == ["same-place"])
     }
 
+    @Test func relatedSectionsBuildOverTheYearsSectionAcrossTimeBuckets() async throws {
+        let database = try makeDatabase()
+        let manager = IndexManager(store: database.indexStore)
+
+        let selectedDate = try #require(Calendar.current.date(
+            from: DateComponents(year: 2026, month: 5, day: 10)
+        ))
+        let selected = makeInput(
+            id: "selected",
+            creationDate: selectedDate,
+            assetKind: .photo,
+            latitude: 51.5,
+            longitude: -0.1
+        )
+        let photo2010Date = try makeDate(year: 2010, month: 5, day: 10)
+        let photo2011Date = try makeDate(year: 2011, month: 5, day: 10)
+        let photo2017Date = try makeDate(year: 2017, month: 5, day: 10)
+        let photo2018Date = try makeDate(year: 2018, month: 5, day: 10)
+        let photo2022Date = try makeDate(year: 2022, month: 5, day: 10)
+        let photo2025Date = try makeDate(year: 2025, month: 5, day: 10)
+        let extraPhotoDate = try makeDate(year: 2025, month: 6, day: 10)
+        let candidates = [
+            makeInput(
+                id: "photo-2010",
+                creationDate: photo2010Date,
+                latitude: 51.5001,
+                longitude: -0.1001
+            ),
+            makeInput(
+                id: "photo-2011",
+                creationDate: photo2011Date,
+                latitude: 51.5002,
+                longitude: -0.1002
+            ),
+            makeInput(
+                id: "photo-2017",
+                creationDate: photo2017Date,
+                latitude: 51.5003,
+                longitude: -0.1003
+            ),
+            makeInput(
+                id: "photo-2018",
+                creationDate: photo2018Date,
+                latitude: 51.5004,
+                longitude: -0.1004
+            ),
+            makeInput(
+                id: "photo-2022",
+                creationDate: photo2022Date,
+                latitude: 51.5005,
+                longitude: -0.1005
+            ),
+            makeInput(
+                id: "photo-2025",
+                creationDate: photo2025Date,
+                latitude: 51.5006,
+                longitude: -0.1006
+            ),
+            makeInput(
+                id: "photo-extra",
+                creationDate: extraPhotoDate,
+                latitude: 51.5007,
+                longitude: -0.1007
+            )
+        ]
+
+        _ = try await manager.indexPhotos([selected] + candidates)
+
+        let sections = try await manager.relatedSections(
+            for: selected,
+            limitPerSection: 6
+        )
+
+        #expect(sections.first?.kind == .overTheYears)
+        #expect(sections.first?.candidates.map(\.id) == [
+            "photo-2010",
+            "photo-2011",
+            "photo-2017",
+            "photo-2018",
+            "photo-2022",
+            "photo-2025"
+        ])
+    }
+
     @Test func relatedSectionsPreferFavoritesBeforeOtherCandidates() async throws {
         let database = try makeDatabase()
         let manager = IndexManager(store: database.indexStore)
@@ -203,6 +287,9 @@ struct TracesTests {
         ))
         let olderDate = try #require(Calendar.current.date(
             from: DateComponents(year: 2024, month: 5, day: 10)
+        ))
+        let favoriteDate = try #require(Calendar.current.date(
+            from: DateComponents(year: 2025, month: 5, day: 10)
         ))
 
         let selected = makeInput(
@@ -221,7 +308,7 @@ struct TracesTests {
         )
         let fartherFavoritePhoto = makeInput(
             id: "farther-favorite-photo",
-            creationDate: olderDate,
+            creationDate: favoriteDate,
             assetKind: .photo,
             isFavorite: true,
             latitude: 51.501,
@@ -257,6 +344,16 @@ struct TracesTests {
 
     private func makeDatabase() throws -> AppDatabase {
         try AppDatabase(dbQueue: DatabaseQueue())
+    }
+
+    private func makeDate(
+        year: Int,
+        month: Int,
+        day: Int
+    ) throws -> Date {
+        try #require(Calendar.current.date(
+            from: DateComponents(year: year, month: month, day: day)
+        ))
     }
 
     private func makeInput(

@@ -8,6 +8,7 @@
 import Foundation
 
 nonisolated enum RelatedPhotoSectionKind: String, Sendable {
+    case overTheYears
     case samePlaceEarlierYears
     case samePlace
     case similarPhotos

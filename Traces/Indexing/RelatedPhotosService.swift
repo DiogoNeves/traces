@@ -8,6 +8,17 @@
 import Foundation
 
 nonisolated struct RelatedPhotosService {
+    private struct YearBucket {
+        let offset: Int
+        let createdAfter: Date?
+        let createdBefore: Date
+    }
+
+    private struct BucketedCandidate {
+        let bucketOffset: Int
+        let candidate: RelatedPhotoCandidate
+    }
+
     private let store: IndexStore
     private let calendar: Calendar
 
@@ -27,26 +38,72 @@ nonisolated struct RelatedPhotosService {
             return []
         }
 
+        var sections: [RelatedPhotoSection] = []
+        var usedCandidateIDs = Set<String>()
+
+        if let overTheYears = try overTheYearsSection(
+            for: input,
+            maxCount: min(max(limitPerSection, 2), 6)
+        ) {
+            sections.append(overTheYears)
+            usedCandidateIDs.formUnion(overTheYears.candidates.map(\.id))
+        }
+
         if let earlierYears = try samePlaceEarlierYearsSection(
             for: input,
-            limit: limitPerSection
+            limit: min(limitPerSection, 3),
+            excluding: usedCandidateIDs
         ) {
-            return [earlierYears]
+            sections.append(earlierYears)
+            usedCandidateIDs.formUnion(earlierYears.candidates.map(\.id))
         }
 
         if let samePlace = try samePlaceSection(
             for: input,
-            limit: limitPerSection
+            limit: min(limitPerSection, 3),
+            excluding: usedCandidateIDs
         ) {
-            return [samePlace]
+            sections.append(samePlace)
         }
 
-        return []
+        return sections
+    }
+
+    private func overTheYearsSection(
+        for input: PhotoIndexInput,
+        maxCount: Int
+    ) throws -> RelatedPhotoSection? {
+        guard let selectedDate = input.creationDate else {
+            return nil
+        }
+
+        let buckets = makeYearBuckets(before: selectedDate)
+        let bucketedCandidates = try collectOverTheYearsCandidates(
+            for: input,
+            buckets: buckets,
+            minimumCount: 2
+        )
+        let sectionCandidates = spreadOverTheYearsCandidates(
+            bucketedCandidates,
+            maxCount: maxCount,
+            selectedInput: input
+        )
+
+        guard sectionCandidates.count >= 2 else {
+            return nil
+        }
+
+        return RelatedPhotoSection(
+            kind: .overTheYears,
+            title: "Over the years",
+            candidates: sectionCandidates
+        )
     }
 
     private func samePlaceEarlierYearsSection(
         for input: PhotoIndexInput,
-        limit: Int
+        limit: Int,
+        excluding excludedIDs: Set<String>
     ) throws -> RelatedPhotoSection? {
         guard let selectedDate = input.creationDate else {
             return nil
@@ -54,9 +111,11 @@ nonisolated struct RelatedPhotosService {
 
         let candidates = try collectNearbyCandidates(
             for: input,
-            olderThan: selectedDate,
+            createdAfter: nil,
+            createdBefore: selectedDate,
             minimumCount: limit
         ) {
+            !excludedIDs.contains($0.id) &&
             yearDifference(
                 from: $0.creationDate,
                 to: input.creationDate
@@ -65,7 +124,7 @@ nonisolated struct RelatedPhotosService {
         let rankedCandidates = rankEarlierYearCandidates(
             candidates,
             selectedInput: input
-        )
+        ).filter { !excludedIDs.contains($0.id) }
         let sectionCandidates = Array(rankedCandidates.prefix(limit))
 
         guard !sectionCandidates.isEmpty else {
@@ -84,17 +143,19 @@ nonisolated struct RelatedPhotosService {
 
     private func samePlaceSection(
         for input: PhotoIndexInput,
-        limit: Int
+        limit: Int,
+        excluding excludedIDs: Set<String>
     ) throws -> RelatedPhotoSection? {
         let candidates = try collectNearbyCandidates(
             for: input,
-            olderThan: nil,
+            createdAfter: nil,
+            createdBefore: nil,
             minimumCount: limit
-        ) { _ in true }
+        ) { !excludedIDs.contains($0.id) }
         let rankedCandidates = rankSamePlaceCandidates(
             candidates,
             selectedInput: input
-        )
+        ).filter { !excludedIDs.contains($0.id) }
         let sectionCandidates = Array(rankedCandidates.prefix(limit))
 
         guard !sectionCandidates.isEmpty else {
@@ -110,7 +171,8 @@ nonisolated struct RelatedPhotosService {
 
     private func collectNearbyCandidates(
         for input: PhotoIndexInput,
-        olderThan: Date?,
+        createdAfter: Date?,
+        createdBefore: Date?,
         minimumCount: Int,
         isUsefulCandidate: (RelatedPhotoCandidate) -> Bool
     ) throws -> [RelatedPhotoCandidate] {
@@ -120,7 +182,8 @@ nonisolated struct RelatedPhotosService {
             let candidates = try store.nearbyCandidates(
                 for: input,
                 bucketRadius: bucketRadius,
-                olderThan: olderThan,
+                createdAfter: createdAfter,
+                createdBefore: createdBefore,
                 limit: 300
             )
 
@@ -138,6 +201,209 @@ nonisolated struct RelatedPhotosService {
         }
 
         return Array(candidatesByID.values)
+    }
+
+    private func collectOverTheYearsCandidates(
+        for input: PhotoIndexInput,
+        buckets: [YearBucket],
+        minimumCount: Int
+    ) throws -> [BucketedCandidate] {
+        var candidatesByID: [String: BucketedCandidate] = [:]
+
+        for bucketRadius in [1, 2, 5] {
+            for bucket in buckets {
+                let candidates = try store.nearbyCandidates(
+                    for: input,
+                    bucketRadius: bucketRadius,
+                    createdAfter: bucket.createdAfter,
+                    createdBefore: bucket.createdBefore,
+                    limit: 60
+                )
+
+                for candidate in candidates {
+                    candidatesByID[candidate.id] = BucketedCandidate(
+                        bucketOffset: bucket.offset,
+                        candidate: candidate
+                    )
+                }
+            }
+
+            if candidatesByID.count >= minimumCount {
+                break
+            }
+        }
+
+        return Array(candidatesByID.values)
+    }
+
+    private func spreadOverTheYearsCandidates(
+        _ bucketedCandidates: [BucketedCandidate],
+        maxCount: Int,
+        selectedInput: PhotoIndexInput
+    ) -> [RelatedPhotoCandidate] {
+        var selected: [RelatedPhotoCandidate] = []
+
+        for isFavorite in [true, false] {
+            var candidatesByBucket = Dictionary(
+                grouping: bucketedCandidates.filter {
+                    $0.candidate.isFavorite == isFavorite
+                },
+                by: \.bucketOffset
+            )
+
+            for bucketOffset in candidatesByBucket.keys {
+                candidatesByBucket[bucketOffset]?.sort {
+                    compareOverTheYearsCandidates(
+                        $0,
+                        $1,
+                        selectedInput: selectedInput
+                    )
+                }
+            }
+
+            while selected.count < maxCount {
+                var addedCandidate = false
+
+                for bucketOffset in [10, 5, 2, 0] {
+                    guard let nextCandidate = candidatesByBucket[bucketOffset]?
+                        .first else {
+                        continue
+                    }
+
+                    selected.append(nextCandidate.candidate)
+                    candidatesByBucket[bucketOffset]?.removeFirst()
+                    addedCandidate = true
+
+                    if selected.count == maxCount {
+                        break
+                    }
+                }
+
+                if !addedCandidate {
+                    break
+                }
+            }
+        }
+
+        return selected.sorted {
+            compareOverTheYearsDisplayOrder(
+                $0,
+                $1,
+                selectedInput: selectedInput
+            )
+        }
+    }
+
+    private func compareOverTheYearsCandidates(
+        _ lhs: BucketedCandidate,
+        _ rhs: BucketedCandidate,
+        selectedInput: PhotoIndexInput
+    ) -> Bool {
+        if compareLocationThenID(
+            lhs.candidate,
+            rhs.candidate,
+            selectedInput: selectedInput
+        ) {
+            return true
+        }
+
+        switch (lhs.candidate.creationDate, rhs.candidate.creationDate) {
+        case let (lhsDate?, rhsDate?) where lhsDate != rhsDate:
+            return lhsDate < rhsDate
+
+        case (_?, nil):
+            return true
+
+        case (nil, _?):
+            return false
+
+        default:
+            return lhs.candidate.id < rhs.candidate.id
+        }
+    }
+
+    private func compareOverTheYearsDisplayOrder(
+        _ lhs: RelatedPhotoCandidate,
+        _ rhs: RelatedPhotoCandidate,
+        selectedInput: PhotoIndexInput
+    ) -> Bool {
+        if lhs.isFavorite != rhs.isFavorite {
+            return lhs.isFavorite
+        }
+
+        let lhsDistance = distanceMeters(from: selectedInput, to: lhs)
+        let rhsDistance = distanceMeters(from: selectedInput, to: rhs)
+
+        switch (lhsDistance, rhsDistance) {
+        case let (lhs?, rhs?) where lhs != rhs:
+            return lhs < rhs
+
+        case (_?, nil):
+            return true
+
+        case (nil, _?):
+            return false
+
+        default:
+            break
+        }
+
+        switch (lhs.creationDate, rhs.creationDate) {
+        case let (lhsDate?, rhsDate?) where lhsDate != rhsDate:
+            return lhsDate < rhsDate
+
+        case (_?, nil):
+            return true
+
+        case (nil, _?):
+            return false
+
+        default:
+            return lhs.id < rhs.id
+        }
+    }
+
+    private func makeYearBuckets(before selectedDate: Date) -> [YearBucket] {
+        guard let twoYearsAgo = calendar.date(
+            byAdding: .year,
+            value: -2,
+            to: selectedDate
+        ),
+              let fiveYearsAgo = calendar.date(
+                byAdding: .year,
+                value: -5,
+                to: selectedDate
+              ),
+              let tenYearsAgo = calendar.date(
+                byAdding: .year,
+                value: -10,
+                to: selectedDate
+              ) else {
+            return []
+        }
+
+        return [
+            YearBucket(
+                offset: 10,
+                createdAfter: nil,
+                createdBefore: tenYearsAgo
+            ),
+            YearBucket(
+                offset: 5,
+                createdAfter: tenYearsAgo,
+                createdBefore: fiveYearsAgo
+            ),
+            YearBucket(
+                offset: 2,
+                createdAfter: fiveYearsAgo,
+                createdBefore: twoYearsAgo
+            ),
+            YearBucket(
+                offset: 0,
+                createdAfter: twoYearsAgo,
+                createdBefore: selectedDate
+            )
+        ]
     }
 
     private func rankEarlierYearCandidates(
@@ -180,6 +446,23 @@ nonisolated struct RelatedPhotosService {
     ) -> Bool {
         if lhs.isFavorite != rhs.isFavorite {
             return lhs.isFavorite
+        }
+
+        let lhsDistance = distanceMeters(from: selectedInput, to: lhs)
+        let rhsDistance = distanceMeters(from: selectedInput, to: rhs)
+
+        switch (lhsDistance, rhsDistance) {
+        case let (lhs?, rhs?) where lhs != rhs:
+            return lhs < rhs
+
+        case (_?, nil):
+            return true
+
+        case (nil, _?):
+            return false
+
+        default:
+            break
         }
 
         let lhsYearDifference = yearDifference(

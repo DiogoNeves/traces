@@ -105,6 +105,20 @@ nonisolated struct AppDatabase {
             )
         }
 
+        migrator.registerMigration("addRelatedPhotoLookupIndex") { db in
+            try db.create(
+                index: "idx_indexed_photo_related_lookup",
+                on: "indexed_photo",
+                columns: [
+                    "asset_kind",
+                    "lat_bucket",
+                    "lon_bucket",
+                    "is_favorite",
+                    "creation_date"
+                ]
+            )
+        }
+
         return migrator
     }
 }

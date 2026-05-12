@@ -42,14 +42,16 @@ struct RelatedPhotosSection: View {
                 .font(.footnote.weight(.semibold))
                 .foregroundStyle(.primary)
 
-            HStack(spacing: 8) {
-                ForEach(section.assets.prefix(3), id: \.localIdentifier) { asset in
-                    NavigationLink(value: asset.localIdentifier) {
-                        PhotoThumbnailView(asset: asset)
-                            .frame(width: 92, height: 92)
-                            .clipShape(RoundedRectangle(cornerRadius: 6))
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(section.assets, id: \.localIdentifier) { asset in
+                        NavigationLink(value: asset.localIdentifier) {
+                            PhotoThumbnailView(asset: asset)
+                                .frame(width: 92, height: 92)
+                                .clipShape(RoundedRectangle(cornerRadius: 6))
+                        }
+                        .buttonStyle(.plain)
                     }
-                    .buttonStyle(.plain)
                 }
             }
         }

@@ -269,7 +269,7 @@ struct PhotoDetailView: View {
         do {
             let sections = try await indexManager.relatedSections(
                 for: input,
-                limitPerSection: 3
+                limitPerSection: 6
             )
             let ids = sections.flatMap { section in
                 section.candidates.map(\.id)
