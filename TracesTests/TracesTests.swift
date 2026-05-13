@@ -278,6 +278,45 @@ struct TracesTests {
         ])
     }
 
+    @Test func relatedSectionsSkipOverTheYearsWithoutOneYearSpread() async throws {
+        let database = try makeDatabase()
+        let manager = IndexManager(store: database.indexStore)
+
+        let selectedDate = try makeDate(year: 2026, month: 5, day: 10)
+        let selected = makeInput(
+            id: "selected",
+            creationDate: selectedDate,
+            assetKind: .photo,
+            latitude: 51.5,
+            longitude: -0.1
+        )
+        let sameSeasonPhoto = makeInput(
+            id: "same-season-photo",
+            creationDate: try makeDate(year: 2025, month: 9, day: 10),
+            latitude: 51.5001,
+            longitude: -0.1001
+        )
+        let nearbySeasonPhoto = makeInput(
+            id: "nearby-season-photo",
+            creationDate: try makeDate(year: 2025, month: 10, day: 10),
+            latitude: 51.5002,
+            longitude: -0.1002
+        )
+
+        _ = try await manager.indexPhotos([
+            selected,
+            sameSeasonPhoto,
+            nearbySeasonPhoto
+        ])
+
+        let sections = try await manager.relatedSections(
+            for: selected,
+            limitPerSection: 6
+        )
+
+        #expect(!sections.map(\.kind).contains(.overTheYears))
+    }
+
     @Test func relatedSectionsPreferFavoritesBeforeOtherCandidates() async throws {
         let database = try makeDatabase()
         let manager = IndexManager(store: database.indexStore)

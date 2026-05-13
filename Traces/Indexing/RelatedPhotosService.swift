@@ -92,7 +92,8 @@ nonisolated struct RelatedPhotosService {
             sectionCandidates
         )
 
-        guard uniqueSectionCandidates.count >= 2 else {
+        guard uniqueSectionCandidates.count >= 2,
+              hasMoreThanOneYearSpread(uniqueSectionCandidates) else {
             return nil
         }
 
@@ -309,6 +310,24 @@ nonisolated struct RelatedPhotosService {
         return candidates.filter { candidate in
             seenIDs.insert(candidate.id).inserted
         }
+    }
+
+    private func hasMoreThanOneYearSpread(
+        _ candidates: [RelatedPhotoCandidate]
+    ) -> Bool {
+        let dates = candidates.compactMap(\.creationDate)
+
+        guard let earliestDate = dates.min(),
+              let latestDate = dates.max(),
+              let oneYearAfterEarliest = calendar.date(
+                byAdding: .year,
+                value: 1,
+                to: earliestDate
+              ) else {
+            return false
+        }
+
+        return latestDate > oneYearAfterEarliest
     }
 
     private func compareOverTheYearsCandidates(
